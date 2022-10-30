@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react"
-import AcidJPEG from "../assets/acid.jpeg"
+import AcidJPEG from "../assets/acid_square.jpeg"
 
 const vertexShader = /*glsl*/`
   precision lowp float;
@@ -37,20 +37,30 @@ const fragmentShader = /*glsl*/`
     return fract(tan(distance(xy*PHI, xy)*seed)*xy.x);
   }
 
+  float FPS = 60.0;
+
   void main() {
     vec2 st = gl_FragCoord.xy / u_resolution;
 
-    st.x += cos(st.x * 500.0) * sin(st.y * 100.0) * (0.001 * sin(u_time / 1.0));
+    float aspect = u_resolution.x / u_resolution.y;
+
+    st.x *= aspect;
+
+    st.x += cos(st.x * 10.0) * sin(st.y * 10.0) * sin(st.x * 10.0) * cos(st.y * 10.0);
 
     float onx = 1.0 / u_resolution.x;
     float ony = 1.0 / u_resolution.y;
 
     float seed = fract(u_time * sin(u_resolution.x) * sin(u_resolution.y));
+    float scroll = mod(u_time / 10.0, FPS) / FPS;
 
-    float offset = float(rand(gl_FragCoord.xx + sin(seed), seed) > 0.6);
-    float offset2 = float(rand(gl_FragCoord.yy + sin(seed), seed) > 0.9);
+    vec4 noise = getPixel(vec2(st.x + scroll * 1.0, st.y));
 
-    vec4 color = getPixel(vec2(st.x + (onx * offset2), st.y + (ony * offset)));
+    float show = float(noise.b > 0.4);
+
+    vec4 color = vec4(1.0 * show);
+    
+    color.a = 1.0;
 
     gl_FragColor = color;
   }
@@ -85,7 +95,7 @@ const createProgram = (gl: WebGLRenderingContext, vertexShader: WebGLShader, fra
   gl.deleteProgram(program)
 }
 
-const HEIGHT = 256
+const HEIGHT = 1920
 
 let renderer: number
 
@@ -156,7 +166,7 @@ const initWebgl = (gl: WebGL2RenderingContext) => {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
   })
   
   image.src = AcidJPEG
@@ -181,19 +191,19 @@ const initWebgl = (gl: WebGL2RenderingContext) => {
 
     gl.flush()
 
-    gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, source)
+    // gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, source)
     
-    gl.texImage2D(
-      gl.TEXTURE_2D, 
-      0, 
-      gl.RGBA, 
-      gl.canvas.width, 
-      gl.canvas.height, 
-      0, 
-      gl.RGBA, 
-      gl.UNSIGNED_BYTE,
-      new Uint8Array(source),
-    )
+    // gl.texImage2D(
+    //   gl.TEXTURE_2D, 
+    //   0, 
+    //   gl.RGBA, 
+    //   gl.canvas.width, 
+    //   gl.canvas.height, 
+    //   0, 
+    //   gl.RGBA, 
+    //   gl.UNSIGNED_BYTE,
+    //   new Uint8Array(source),
+    // )
 
     return requestAnimationFrame(() => {
       gl.uniform1f(timeLocation, ++time)
