@@ -1,14 +1,14 @@
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import AcidJPEG from "../assets/acid.jpeg"
 
 const vertexShader = /*glsl*/`
-  precision mediump float;
-  attribute mediump vec2 a_position;
-  uniform mediump vec2 u_resolution;
-  uniform mediump float u_time;
+  precision lowp float;
+  attribute lowp vec2 a_position;
+  uniform lowp vec2 u_resolution;
+  uniform lowp float u_time;
   attribute vec2 a_texcoord;
 
-  varying highp vec2 v_texcoord;
+  varying lowp vec2 v_texcoord;
 
   void main() {
     vec2 zeroToOne = a_position / u_resolution;
@@ -22,17 +22,19 @@ const vertexShader = /*glsl*/`
 
 const fragmentShader = /*glsl*/`
   precision mediump float;
-  uniform mediump vec2 u_resolution;
-  uniform mediump float u_time;
+  uniform lowp vec2 u_resolution;
+  uniform lowp float u_time;
   uniform sampler2D u_sampler;
-  varying highp vec2 v_texcoord;
+  varying lowp vec2 v_texcoord;
 
   vec4 getPixel(vec2 position) {
     return texture2D(u_sampler, position);
   }
 
-  float rand(vec2 co){
-    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+  float PHI = 1.61803398874989484820459;  // Φ = Golden Ratio  
+
+  float rand(in vec2 xy, in float seed){
+    return fract(tan(distance(xy*PHI, xy)*seed)*xy.x);
   }
 
   void main() {
@@ -43,8 +45,10 @@ const fragmentShader = /*glsl*/`
     float onx = 1.0 / u_resolution.x;
     float ony = 1.0 / u_resolution.y;
 
-    float offset = float(rand(st.xy + sin(u_time)) * rand((st.xy + u_time)) > 0.2);
-    float offset2 = float(rand(st.yx + u_time) * rand((st.yx + cos(u_time))) > 0.5);
+    float seed = fract(u_time * sin(u_resolution.x) * sin(u_resolution.y));
+
+    float offset = float(rand(gl_FragCoord.xx + sin(seed), seed) > 0.6);
+    float offset2 = float(rand(gl_FragCoord.yy + sin(seed), seed) > 0.9);
 
     vec4 color = getPixel(vec2(st.x + (onx * offset2), st.y + (ony * offset)));
 
@@ -204,16 +208,24 @@ const initWebgl = (gl: WebGL2RenderingContext) => {
 export const Shader: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  const resizeHandler = useCallback(() => {
+    cancelAnimationFrame(renderer)
+
+    initWebgl(canvasRef.current!.getContext("webgl2")!)
+  }, [])
+
   useEffect(() => {
     if (canvasRef) {
       initWebgl(canvasRef.current!.getContext("webgl2")!)
     }
 
-    window.addEventListener("resize", () => {
+    window.addEventListener("resize", resizeHandler)
+
+    return () => {
       cancelAnimationFrame(renderer)
 
-      initWebgl(canvasRef.current!.getContext("webgl2")!)
-    })
+      window.removeEventListener("resize", resizeHandler)
+    }
   }, [canvasRef])
   
   return (
