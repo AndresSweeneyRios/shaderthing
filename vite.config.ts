@@ -6,6 +6,6 @@ export default defineConfig({
   plugins: [react()],
   base: "./",
   build: {
-    outDir: "./build/melting-smoke",
+    outDir: "./build/duotone-sine",
   }
 })

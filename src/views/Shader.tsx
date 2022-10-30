@@ -1,14 +1,14 @@
-import { useEffect, useRef } from "react"
-import AcidJPEG from "../assets/acid.jpeg"
+import { useCallback, useEffect, useRef } from "react"
+import AcidJPEG from "../assets/acid_square.jpeg"
 
 const vertexShader = /*glsl*/`
-  precision mediump float;
-  attribute mediump vec2 a_position;
-  uniform mediump vec2 u_resolution;
-  uniform mediump float u_time;
+  precision lowp float;
+  attribute lowp vec2 a_position;
+  uniform lowp vec2 u_resolution;
+  uniform lowp float u_time;
   attribute vec2 a_texcoord;
 
-  varying highp vec2 v_texcoord;
+  varying lowp vec2 v_texcoord;
 
   void main() {
     vec2 zeroToOne = a_position / u_resolution;
@@ -22,31 +22,45 @@ const vertexShader = /*glsl*/`
 
 const fragmentShader = /*glsl*/`
   precision mediump float;
-  uniform mediump vec2 u_resolution;
-  uniform mediump float u_time;
+  uniform lowp vec2 u_resolution;
+  uniform lowp float u_time;
   uniform sampler2D u_sampler;
-  varying highp vec2 v_texcoord;
+  varying lowp vec2 v_texcoord;
 
   vec4 getPixel(vec2 position) {
     return texture2D(u_sampler, position);
   }
 
-  float rand(vec2 co){
-    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+  float PHI = 1.61803398874989484820459;  // Φ = Golden Ratio  
+
+  float rand(in vec2 xy, in float seed){
+    return fract(tan(distance(xy*PHI, xy)*seed)*xy.x);
   }
+
+  float FPS = 60.0;
 
   void main() {
     vec2 st = gl_FragCoord.xy / u_resolution;
 
-    st.x += cos(st.x * 500.0) * sin(st.y * 100.0) * (0.001 * sin(u_time / 1.0));
+    float aspect = u_resolution.x / u_resolution.y;
+
+    st.x *= aspect;
+
+    st.x += cos(st.x * 10.0) * sin(st.y * 10.0) * sin(st.x * 10.0) * cos(st.y * 10.0);
 
     float onx = 1.0 / u_resolution.x;
     float ony = 1.0 / u_resolution.y;
 
-    float offset = float(rand(st.xy + sin(u_time)) * rand((st.xy + u_time)) > 0.2);
-    float offset2 = float(rand(st.yx + u_time) * rand((st.yx + cos(u_time))) > 0.5);
+    float seed = fract(u_time * sin(u_resolution.x) * sin(u_resolution.y));
+    float scroll = mod(u_time / 10.0, FPS) / FPS;
 
-    vec4 color = getPixel(vec2(st.x + (onx * offset2), st.y + (ony * offset)));
+    vec4 noise = getPixel(vec2(st.x + scroll * 1.0, st.y));
+
+    float show = float(noise.b > 0.4);
+
+    vec4 color = vec4(1.0 * show);
+    
+    color.a = 1.0;
 
     gl_FragColor = color;
   }
@@ -81,7 +95,7 @@ const createProgram = (gl: WebGLRenderingContext, vertexShader: WebGLShader, fra
   gl.deleteProgram(program)
 }
 
-const HEIGHT = 256
+const HEIGHT = 1920
 
 let renderer: number
 
@@ -152,7 +166,7 @@ const initWebgl = (gl: WebGL2RenderingContext) => {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
   })
   
   image.src = AcidJPEG
@@ -177,19 +191,19 @@ const initWebgl = (gl: WebGL2RenderingContext) => {
 
     gl.flush()
 
-    gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, source)
+    // gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, source)
     
-    gl.texImage2D(
-      gl.TEXTURE_2D, 
-      0, 
-      gl.RGBA, 
-      gl.canvas.width, 
-      gl.canvas.height, 
-      0, 
-      gl.RGBA, 
-      gl.UNSIGNED_BYTE,
-      new Uint8Array(source),
-    )
+    // gl.texImage2D(
+    //   gl.TEXTURE_2D, 
+    //   0, 
+    //   gl.RGBA, 
+    //   gl.canvas.width, 
+    //   gl.canvas.height, 
+    //   0, 
+    //   gl.RGBA, 
+    //   gl.UNSIGNED_BYTE,
+    //   new Uint8Array(source),
+    // )
 
     return requestAnimationFrame(() => {
       gl.uniform1f(timeLocation, ++time)
@@ -204,16 +218,24 @@ const initWebgl = (gl: WebGL2RenderingContext) => {
 export const Shader: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  const resizeHandler = useCallback(() => {
+    cancelAnimationFrame(renderer)
+
+    initWebgl(canvasRef.current!.getContext("webgl2")!)
+  }, [])
+
   useEffect(() => {
     if (canvasRef) {
       initWebgl(canvasRef.current!.getContext("webgl2")!)
     }
 
-    window.addEventListener("resize", () => {
+    window.addEventListener("resize", resizeHandler)
+
+    return () => {
       cancelAnimationFrame(renderer)
 
-      initWebgl(canvasRef.current!.getContext("webgl2")!)
-    })
+      window.removeEventListener("resize", resizeHandler)
+    }
   }, [canvasRef])
   
   return (
